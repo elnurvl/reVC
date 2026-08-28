@@ -277,7 +277,9 @@ void
 psMouseSetPos(RwV2d *pos)
 {
 	glfwSetCursorPos(PSGLOBAL(window), pos->x, pos->y);
-	
+	if (glfwGetWindowAttrib(PSGLOBAL(window), GLFW_FOCUSED))
+		PSGLOBAL(cursorIsInWindow) = true;
+
 	PSGLOBAL(lastMousePos.x) = (RwInt32)pos->x;
 
 	PSGLOBAL(lastMousePos.y) = (RwInt32)pos->y;
@@ -1046,6 +1048,8 @@ long _InputInitialiseMouse(bool exclusive)
 	// Disabled = keep cursor centered and hide
 	lastCursorMode = exclusive ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_HIDDEN;
 	glfwSetInputMode(PSGLOBAL(window), GLFW_CURSOR, lastCursorMode);
+	if (exclusive && glfwGetWindowAttrib(PSGLOBAL(window), GLFW_FOCUSED))
+		PSGLOBAL(cursorIsInWindow) = true;
 	return 0;
 }
 
@@ -1872,6 +1876,10 @@ cursorEnterCB(GLFWwindow* window, int entered) {
 void
 windowFocusCB(GLFWwindow* window, int focused) {
 	WindowFocused = !!focused;
+	if (!focused)
+		PSGLOBAL(cursorIsInWindow) = false;
+	else if (lastCursorMode == GLFW_CURSOR_DISABLED || glfwGetWindowAttrib(window, GLFW_HOVERED))
+		PSGLOBAL(cursorIsInWindow) = true;
 }
 
 void
