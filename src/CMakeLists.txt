@@ -213,6 +213,25 @@ set_target_properties(${EXECUTABLE}
         CXX_STANDARD_REQUIRED ON
 )
 
+if(APPLE AND NOT ANDROID)
+    set(${PROJECT}_MACOS_BUNDLE "$<TARGET_FILE_DIR:${EXECUTABLE}>/${EXECUTABLE}.app")
+    add_custom_command(TARGET ${EXECUTABLE} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${${PROJECT}_MACOS_BUNDLE}/Contents/MacOS"
+            "${${PROJECT}_MACOS_BUNDLE}/Contents/Resources"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:${EXECUTABLE}>"
+            "${${PROJECT}_MACOS_BUNDLE}/Contents/MacOS/${EXECUTABLE}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PROJECT_SOURCE_DIR}/res/images/reVC.icns"
+            "${${PROJECT}_MACOS_BUNDLE}/Contents/Resources/reVC.icns"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PROJECT_SOURCE_DIR}/res/macos/Info.plist"
+            "${${PROJECT}_MACOS_BUNDLE}/Contents/Info.plist"
+        VERBATIM
+    )
+endif()
+
 if(${PROJECT}_INSTALL)
     install(
         TARGETS ${EXECUTABLE}

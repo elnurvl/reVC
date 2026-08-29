@@ -248,6 +248,18 @@ project "reVC"
 	targetname "reVC"
 	targetdir "bin/%{cfg.platform}/%{cfg.buildcfg}"
 
+	filter { "system:macosx", "action:gmake*" }
+		files { "res/images/reVC.icns", "res/macos/Info.plist" }
+		postbuildcommands {
+			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/MacOS"',
+			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources"',
+			'{COPYFILE} "%{cfg.buildtarget.abspath}" "%{cfg.targetdir}/reVC.app/Contents/MacOS/reVC"',
+			'{COPYFILE} "%{prj.location}/../res/images/reVC.icns" "%{cfg.targetdir}/reVC.app/Contents/Resources/reVC.icns"',
+			'{COPYFILE} "%{prj.location}/../res/macos/Info.plist" "%{cfg.targetdir}/reVC.app/Contents/Info.plist"',
+		}
+
+	filter {}
+
 	if(_OPTIONS["with-librw"]) then
 		dependson "librw"
 	end
