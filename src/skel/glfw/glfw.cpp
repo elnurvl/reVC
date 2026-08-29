@@ -78,6 +78,7 @@ static RwBool		  RwInitialised = FALSE;
 static RwSubSystemInfo GsubSysInfo[MAX_SUBSYSTEMS];
 static RwInt32		GnumSubSystems = 0;
 static RwInt32		GcurSel = 0, GcurSelVM = 0;
+static RwInt32		desktopWidth = 0, desktopHeight = 0;
 
 static RwBool useDefault;
 
@@ -276,7 +277,17 @@ psTimer(void)
 void
 psMouseSetPos(RwV2d *pos)
 {
-	glfwSetCursorPos(PSGLOBAL(window), pos->x, pos->y);
+	int winw, winh;
+	glfwGetWindowSize(PSGLOBAL(window), &winw, &winh);
+	glfwSetCursorPos(PSGLOBAL(window),
+		pos->x * (double)winw / RsGlobal.maximumWidth,
+		pos->y * (double)winh / RsGlobal.maximumHeight);
+	FrontEndMenuManager.m_nMouseTempPosX = pos->x;
+	FrontEndMenuManager.m_nMouseTempPosY = pos->y;
+	FrontEndMenuManager.m_nMousePosX = pos->x;
+	FrontEndMenuManager.m_nMousePosY = pos->y;
+	FrontEndMenuManager.m_nMouseOldPosX = pos->x;
+	FrontEndMenuManager.m_nMouseOldPosY = pos->y;
 	if (glfwGetWindowAttrib(PSGLOBAL(window), GLFW_FOCUSED))
 		PSGLOBAL(cursorIsInWindow) = true;
 
@@ -747,7 +758,12 @@ psSelectDevice()
 	RwVideoMode			vm;
 	RwInt32				subSysNum;
 	RwInt32				AutoRenderer = 0;
-	
+
+	const GLFWvidmode *desktopMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+	if (desktopMode) {
+		desktopWidth = desktopMode->width;
+		desktopHeight = desktopMode->height;
+	}
 
 	RwBool modeFound = FALSE;
 	
@@ -1055,7 +1071,15 @@ long _InputInitialiseMouse(bool exclusive)
 
 void _InputShutdownMouse()
 {
-	// Not needed
+	lastCursorMode = GLFW_CURSOR_NORMAL;
+	glfwSetInputMode(PSGLOBAL(window), GLFW_CURSOR, lastCursorMode);
+}
+
+static void
+centreMouseForDesktop()
+{
+	if (desktopWidth > 0 && desktopHeight > 0)
+		glfwSetCursorPos(PSGLOBAL(window), desktopWidth * 0.5, desktopHeight * 0.5);
 }
 
 // Not "needs exclusive" on GLFW, but more like "needs to change mode"
@@ -1106,7 +1130,9 @@ void psPostRWinit(void)
 RwBool _psSetVideoMode(RwInt32 subSystem, RwInt32 videoMode)
 {
 	RwInitialised = FALSE;
-	
+
+	_InputShutdownMouse();
+	centreMouseForDesktop();
 	RsEventHandler(rsRWTERMINATE, nil);
 	
 	GcurSel = subSystem;
@@ -1864,8 +1890,8 @@ cursorCB(GLFWwindow* window, double xpos, double ypos) {
 	
 	int winw, winh;
 	glfwGetWindowSize(PSGLOBAL(window), &winw, &winh);
-	FrontEndMenuManager.m_nMouseTempPosX = xpos * (RsGlobal.maximumWidth / winw);
-	FrontEndMenuManager.m_nMouseTempPosY = ypos * (RsGlobal.maximumHeight / winh);
+	FrontEndMenuManager.m_nMouseTempPosX = xpos * ((double)RsGlobal.maximumWidth / winw);
+	FrontEndMenuManager.m_nMouseTempPosY = ypos * ((double)RsGlobal.maximumHeight / winh);
 }
 
 void
@@ -2468,6 +2494,8 @@ main(int argc, char *argv[])
 	/*
 	 * Tidy up the 3D (RenderWare) components of the application...
 	 */
+	_InputShutdownMouse();
+	centreMouseForDesktop();
 	RsEventHandler(rsRWTERMINATE, nil);
 
 	/*
