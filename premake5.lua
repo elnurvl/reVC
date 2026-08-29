@@ -68,6 +68,14 @@ function getarch(a)
 	return a
 end
 
+local function dependencyincludedirs(paths)
+	if _ACTION == "xcode4" then
+		externalincludedirs(paths)
+	else
+		includedirs(paths)
+	end
+end
+
 workspace "reVC"
 	language "C++"
 	configurations { "Debug", "Release" }
@@ -111,10 +119,14 @@ workspace "reVC"
 		}
 
 	filter { "system:macosx" }
-		platforms {
-			"macosx-arm64-librw_gl3_glfw-oal",
-			"macosx-amd64-librw_gl3_glfw-oal",
-		}
+		if _ACTION == "xcode4" then
+			platforms { "macosx-librw_gl3_glfw-oal" }
+		else
+			platforms {
+				"macosx-arm64-librw_gl3_glfw-oal",
+				"macosx-amd64-librw_gl3_glfw-oal",
+			}
+		end
 
 	filter "configurations:Debug"
 		defines { "DEBUG" }
@@ -150,17 +162,32 @@ workspace "reVC"
 	filter { "platforms:*arm64*" }
 		architecture "ARM64"
 
-	filter { "platforms:macosx-arm64-*", "files:**.cpp"}
+	filter { "platforms:macosx-arm64-*", "action:not xcode4", "files:**.cpp"}
 		buildoptions { "-target", "arm64-apple-macos11", "-std=gnu++14" }
 
-	filter { "platforms:macosx-arm64-*", "files:**.c"}
+	filter { "platforms:macosx-arm64-*", "action:not xcode4", "files:**.c"}
 		buildoptions { "-target", "arm64-apple-macos11" }
 
-	filter { "platforms:macosx-amd64-*", "files:**.cpp"}
+	filter { "platforms:macosx-arm64-*", "action:not xcode4" }
+		linkoptions { "-target", "arm64-apple-macos11" }
+
+	filter { "platforms:macosx-amd64-*", "action:not xcode4", "files:**.cpp"}
 		buildoptions { "-target", "x86_64-apple-macos10.12", "-std=gnu++14" }
 
-	filter { "platforms:macosx-amd64-*", "files:**.c"}
+	filter { "platforms:macosx-amd64-*", "action:not xcode4", "files:**.c"}
 		buildoptions { "-target", "x86_64-apple-macos10.12" }
+
+	filter { "platforms:macosx-amd64-*", "action:not xcode4" }
+		linkoptions { "-target", "x86_64-apple-macos10.12" }
+
+	filter { "action:xcode4" }
+		cppdialect "gnu++14"
+		xcodebuildsettings {
+			["ARCHS"] = { "$(ARCHS_STANDARD)" },
+			["MACOSX_DEPLOYMENT_TARGET[arch=arm64]"] = { "11.0" },
+			["MACOSX_DEPLOYMENT_TARGET[arch=x86_64]"] = { "10.12" },
+			["ONLY_ACTIVE_ARCH"] = { "YES" },
+		}
 
 	filter { "platforms:*librw_d3d9*" }
 		defines { "RW_D3D9" }
@@ -201,7 +228,13 @@ if(_OPTIONS["with-librw"]) then
 project "librw"
 	kind "StaticLib"
 	targetname "rw"
-	targetdir(path.join(Librw, "lib/%{cfg.platform}/%{cfg.buildcfg}"))
+	filter "action:not xcode4"
+		targetdir(path.join(Librw, "lib/%{cfg.platform}/%{cfg.buildcfg}"))
+	filter "action:xcode4"
+		targetdir "${BUILD_DIR}/%{cfg.buildcfg}"
+
+	filter {}
+
 	files { path.join(Librw, "src/*.*") }
 	files { path.join(Librw, "src/*/*.*") }
 	files { path.join(Librw, "src/gl/*/*.*") }
@@ -223,17 +256,26 @@ project "librw"
 
 	-- Support MacPorts and Homebrew
 	filter "platforms:macosx-arm64-*"
-		includedirs { "/opt/local/include" }
-		includedirs {"/opt/homebrew/include" }
+		dependencyincludedirs { "/opt/local/include" }
+		dependencyincludedirs { "/opt/homebrew/include" }
 		libdirs { "/opt/local/lib" }
 		libdirs { "/opt/homebrew/lib" }
-		
+
 	filter "platforms:macosx-amd64-*"
-		includedirs { "/opt/local/include" }
-		includedirs {"/usr/local/include" }
+		dependencyincludedirs { "/opt/local/include" }
+		dependencyincludedirs { "/usr/local/include" }
 		libdirs { "/opt/local/lib" }
 		libdirs { "/usr/local/lib" }
-		
+
+	filter { "system:macosx", "action:xcode4" }
+		dependencyincludedirs { "/opt/local/include" }
+		dependencyincludedirs { "/opt/homebrew/include" }
+		dependencyincludedirs { "/usr/local/include" }
+		xcodebuildsettings {
+			["LIBRARY_SEARCH_PATHS[arch=arm64]"] = { "$(inherited)", "/opt/local/lib", "/opt/homebrew/lib" },
+			["LIBRARY_SEARCH_PATHS[arch=x86_64]"] = { "$(inherited)", "/opt/local/lib", "/usr/local/lib" },
+		}
+
 	filter "platforms:*gl3_glfw*"
 		staticruntime "off"
 
@@ -249,10 +291,23 @@ end
 project "reVC"
 	kind "WindowedApp"
 	targetname "reVC"
-	targetdir "bin/%{cfg.platform}/%{cfg.buildcfg}"
+	filter "action:not xcode4"
+		targetdir "bin/%{cfg.platform}/%{cfg.buildcfg}"
+	filter "action:xcode4"
+		targetdir "${BUILD_DIR}/%{cfg.buildcfg}"
+
+	filter {}
+
+	filter { "system:macosx" }
+		files { "res/images/reVC.icns", "res/macos/Info.plist" }
+
+	filter { "system:macosx", "action:xcode4" }
+		xcodebuildsettings {
+			["PRODUCT_BUNDLE_IDENTIFIER"] = "io.github.mrxenginner.reVC",
+			["INSTALL_PATH"] = "$(LOCAL_APPS_DIR)",
+		}
 
 	filter { "system:macosx", "action:gmake*" }
-		files { "res/images/reVC.icns", "res/macos/Info.plist" }
 		postbuildcommands {
 			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/MacOS"',
 			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources"',
@@ -319,6 +374,11 @@ project "reVC"
 	includedirs { "src/vehicles" }
 	includedirs { "src/weapons" }
 	includedirs { "src/extras" }
+
+	filter "action:xcode4"
+		externalincludedirs { "src/audio/eax", "src/fakerw", Librw }
+
+	filter {}
 
 	if(not _OPTIONS["no-git-hash"]) then
 		defines { "USE_OUR_VERSIONING" }
@@ -420,11 +480,11 @@ project "reVC"
 		links { "openal", "mpg123", "sndfile", "pthread" }
 		
 	filter "platforms:macosx-arm64-*oal"
-		includedirs { "/opt/homebrew/opt/openal-soft/include" }
+		dependencyincludedirs { "/opt/homebrew/opt/openal-soft/include" }
 		libdirs { "/opt/homebrew/opt/openal-soft/lib" }
-		
+
 	filter "platforms:macosx-amd64-*oal"
-		includedirs { "/usr/local/opt/openal-soft/include" }
+		dependencyincludedirs { "/usr/local/opt/openal-soft/include" }
 		libdirs { "/usr/local/opt/openal-soft/lib" }
 
 	if _OPTIONS["with-opus"] then
@@ -446,7 +506,7 @@ project "reVC"
 		files { addSrcFiles("src/fakerw") }
 		includedirs { "src/fakerw" }
 		includedirs { Librw }
-		if(_OPTIONS["with-librw"]) then
+		if(_OPTIONS["with-librw"] and _ACTION ~= "xcode4") then
 			libdirs { "vendor/librw/lib/%{cfg.platform}/%{cfg.buildcfg}" }
 		end
 		links { "rw" }
@@ -478,15 +538,27 @@ project "reVC"
 	filter "platforms:macosx-arm64-*gl3_glfw*"
 		links { "glfw" }
 		linkoptions { "-framework OpenGL" }
-		includedirs { "/opt/local/include" }
-		includedirs {"/opt/homebrew/include" }
+		dependencyincludedirs { "/opt/local/include" }
+		dependencyincludedirs { "/opt/homebrew/include" }
 		libdirs { "/opt/local/lib" }
 		libdirs { "/opt/homebrew/lib" }
-		
+
 	filter "platforms:macosx-amd64-*gl3_glfw*"
 		links { "glfw" }
 		linkoptions { "-framework OpenGL" }
-		includedirs { "/opt/local/include" }
-		includedirs {"/usr/local/include" }
+		dependencyincludedirs { "/opt/local/include" }
+		dependencyincludedirs { "/usr/local/include" }
 		libdirs { "/opt/local/lib" }
 		libdirs { "/usr/local/lib" }
+
+	filter { "system:macosx", "action:xcode4" }
+		links { "glfw", "OpenGL.framework" }
+		dependencyincludedirs { "/opt/local/include" }
+		dependencyincludedirs { "/opt/homebrew/include" }
+		dependencyincludedirs { "/usr/local/include" }
+		dependencyincludedirs { "/opt/homebrew/opt/openal-soft/include" }
+		dependencyincludedirs { "/usr/local/opt/openal-soft/include" }
+		xcodebuildsettings {
+			["LIBRARY_SEARCH_PATHS[arch=arm64]"] = { "$(inherited)", "/opt/local/lib", "/opt/homebrew/lib", "/opt/homebrew/opt/openal-soft/lib" },
+			["LIBRARY_SEARCH_PATHS[arch=x86_64]"] = { "$(inherited)", "/opt/local/lib", "/usr/local/lib", "/usr/local/opt/openal-soft/lib" },
+		}
