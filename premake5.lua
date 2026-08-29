@@ -144,8 +144,11 @@ workspace "reVC"
 	filter { "platforms:*amd64*" }
 		architecture "amd64"
 
-	filter { "platforms:*arm*" }
+	filter { "platforms:*arm-*" }
 		architecture "ARM"
+
+	filter { "platforms:*arm64*" }
+		architecture "ARM64"
 
 	filter { "platforms:macosx-arm64-*", "files:**.cpp"}
 		buildoptions { "-target", "arm64-apple-macos11", "-std=gnu++14" }
