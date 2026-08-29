@@ -5,6 +5,7 @@
 #endif
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
+#include <sys/stat.h>
 #endif
 #include "common.h"
 #include "crossplatform.h"
@@ -114,15 +115,101 @@ GetExecutableDir(char *path, size_t pathSize)
 }
 
 static bool
+GetGameRootFile(char *dir, size_t dirSize, char *path, size_t pathSize)
+{
+	const char *home = getenv("HOME");
+	if(home == nil || *home == '\0')
+		return false;
+
+	int len = snprintf(dir, dirSize, "%s/Library/Application Support/reVC", home);
+	if(len < 0 || len >= (int)dirSize)
+		return false;
+	len = snprintf(path, pathSize, "%s/gamefiles", dir);
+	return len >= 0 && len < (int)pathSize;
+}
+
+static bool
+ReadGameRoot(char *path, size_t pathSize)
+{
+	char dir[FILEMGR_PATH_SIZE];
+	char fileName[FILEMGR_PATH_SIZE];
+	if(!GetGameRootFile(dir, sizeof(dir), fileName, sizeof(fileName)))
+		return false;
+
+	FILE *file = fopen(fileName, "r");
+	if(file == nil)
+		return false;
+
+	char root[FILEMGR_PATH_SIZE];
+	bool found = fgets(root, sizeof(root), file) != nil;
+	fclose(file);
+	if(!found)
+		return false;
+
+	root[strcspn(root, "\r\n")] = '\0';
+	return SetGameRoot(root, path, pathSize);
+}
+
+static void
+WriteGameRoot(const char *root)
+{
+	char dir[FILEMGR_PATH_SIZE];
+	char fileName[FILEMGR_PATH_SIZE];
+	if(!GetGameRootFile(dir, sizeof(dir), fileName, sizeof(fileName)))
+		return;
+
+	mkdir(dir, 0755);
+	FILE *file = fopen(fileName, "w");
+	if(file != nil){
+		fprintf(file, "%s\n", root);
+		fclose(file);
+	}
+}
+
+static bool
+ChooseGameRoot(char *path, size_t pathSize)
+{
+	bool retry = false;
+	for(;;){
+		const char *prompt = retry ?
+			"That folder is not a GTA Vice City installation. Choose the folder containing the data and models folders." :
+			"Choose the GTA Vice City installation folder.";
+		char command[512];
+		snprintf(command, sizeof(command),
+			"/usr/bin/osascript -e 'POSIX path of (choose folder with prompt \"%s\")' 2>/dev/null", prompt);
+
+		FILE *pipe = popen(command, "r");
+		if(pipe == nil)
+			return false;
+
+		char root[FILEMGR_PATH_SIZE];
+		bool found = fgets(root, sizeof(root), pipe) != nil;
+		int status = pclose(pipe);
+		if(!found || status != 0)
+			return false;
+
+		root[strcspn(root, "\r\n")] = '\0';
+		if(SetGameRoot(root, path, pathSize)){
+			WriteGameRoot(path);
+			return true;
+		}
+		retry = true;
+	}
+}
+
+static bool
 FindGameRoot(char *path, size_t pathSize)
 {
+	char executableDir[FILEMGR_PATH_SIZE];
+	if(GetExecutableDir(executableDir, sizeof(executableDir)) &&
+	   SetGameRoot(executableDir, path, pathSize))
+		return true;
+
 	char cwd[FILEMGR_PATH_SIZE];
 	if(_getcwd(cwd, sizeof(cwd)) != nil && SetGameRoot(cwd, path, pathSize))
 		return true;
 
-	char executableDir[FILEMGR_PATH_SIZE];
-	return GetExecutableDir(executableDir, sizeof(executableDir)) &&
-	       SetGameRoot(executableDir, path, pathSize);
+	return ReadGameRoot(path, pathSize) || ChooseGameRoot(path, pathSize);
 }
 #endif
 
@@ -284,13 +371,10 @@ CFileMgr::Initialise(void)
         debug("Android: Root Dir: %s\n", ms_rootDirName);
 	}
 #elif defined(__APPLE__)
-	if(FindGameRoot(ms_rootDirName, sizeof(ms_rootDirName))){
-		strcpy(ms_dirName, ms_rootDirName);
-		mychdir(ms_rootDirName);
-	}else{
-		_getcwd(ms_rootDirName, sizeof(ms_rootDirName));
-		strcat(ms_rootDirName, "\\");
-	}
+	if(ms_rootDirName[0] == '\0' && !FindGameRoot(ms_rootDirName, sizeof(ms_rootDirName)))
+		_exit(0);
+	strcpy(ms_dirName, ms_rootDirName);
+	mychdir(ms_rootDirName);
 #else
 	_getcwd(ms_rootDirName, sizeof(ms_rootDirName));
 	strcat(ms_rootDirName, "\\");
