@@ -201,9 +201,22 @@ static bool
 FindGameRoot(char *path, size_t pathSize)
 {
 	char executableDir[FILEMGR_PATH_SIZE];
-	if(GetExecutableDir(executableDir, sizeof(executableDir)) &&
-	   SetGameRoot(executableDir, path, pathSize))
-		return true;
+	if(GetExecutableDir(executableDir, sizeof(executableDir))){
+		if(SetGameRoot(executableDir, path, pathSize))
+			return true;
+
+		char defaultRoot[FILEMGR_PATH_SIZE];
+		int length = snprintf(defaultRoot, sizeof(defaultRoot),
+			"%s/../Resources/gamefiles", executableDir);
+		if(length >= 0 && length < (int)sizeof(defaultRoot) &&
+		   SetGameRoot(defaultRoot, path, pathSize))
+			return true;
+
+		length = snprintf(defaultRoot, sizeof(defaultRoot), "%s/../../..", executableDir);
+		if(length >= 0 && length < (int)sizeof(defaultRoot) &&
+		   SetGameRoot(defaultRoot, path, pathSize))
+			return true;
+	}
 
 	char cwd[FILEMGR_PATH_SIZE];
 	if(_getcwd(cwd, sizeof(cwd)) != nil && SetGameRoot(cwd, path, pathSize))
