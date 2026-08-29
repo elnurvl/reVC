@@ -3,6 +3,9 @@
 #ifdef _WIN32
 #include <direct.h>
 #endif
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #include "common.h"
 #include "crossplatform.h"
 
@@ -59,6 +62,68 @@ void mychdir(char const *path)
 }
 #else
 #define mychdir chdir
+#endif
+
+#ifdef __APPLE__
+static bool
+GameFileExists(const char *root, const char *name)
+{
+	char path[FILEMGR_PATH_SIZE];
+	int length = snprintf(path, sizeof(path), "%s%s%s", root,
+		root[0] != '\0' && root[strlen(root) - 1] == '/' ? "" : "/", name);
+	if(length < 0 || length >= (int)sizeof(path))
+		return false;
+
+	FILE *file = fcaseopen(path, "rb");
+	if(file == nil)
+		return false;
+	fclose(file);
+	return true;
+}
+
+static bool
+SetGameRoot(const char *root, char *path, size_t pathSize)
+{
+	char realRoot[FILEMGR_PATH_SIZE];
+	if(realpath(root, realRoot) == nil ||
+	   !GameFileExists(realRoot, "data/gta_vc.dat") ||
+	   !GameFileExists(realRoot, "models/gta3.img"))
+		return false;
+
+	int length = snprintf(path, pathSize, "%s/", realRoot);
+	return length >= 0 && length < (int)pathSize;
+}
+
+static bool
+GetExecutableDir(char *path, size_t pathSize)
+{
+	char executable[FILEMGR_PATH_SIZE];
+	uint32 size = sizeof(executable);
+	if(_NSGetExecutablePath(executable, &size) != 0)
+		return false;
+
+	char *slash = strrchr(executable, '/');
+	if(slash == nil)
+		return false;
+	*slash = '\0';
+
+	char realPath[FILEMGR_PATH_SIZE];
+	const char *dir = realpath(executable, realPath) == nil ? executable : realPath;
+	int length = snprintf(path, pathSize, "%s", dir);
+	return length >= 0 && length < (int)pathSize;
+}
+
+static bool
+FindGameRoot(char *path, size_t pathSize)
+{
+	char cwd[FILEMGR_PATH_SIZE];
+	if(_getcwd(cwd, sizeof(cwd)) != nil && SetGameRoot(cwd, path, pathSize))
+		return true;
+
+	char executableDir[FILEMGR_PATH_SIZE];
+	return GetExecutableDir(executableDir, sizeof(executableDir)) &&
+	       SetGameRoot(executableDir, path, pathSize);
+}
 #endif
 
 /* Force file to open as binary but remember if it was text mode */
@@ -206,8 +271,8 @@ myfeof(int fd)
 }
 
 
-char CFileMgr::ms_rootDirName[128] = {'\0'};
-char CFileMgr::ms_dirName[128];
+char CFileMgr::ms_rootDirName[FILEMGR_PATH_SIZE] = {'\0'};
+char CFileMgr::ms_dirName[FILEMGR_PATH_SIZE];
 
 void
 CFileMgr::Initialise(void)
@@ -218,8 +283,16 @@ CFileMgr::Initialise(void)
 		strcat(ms_rootDirName, "/");
         debug("Android: Root Dir: %s\n", ms_rootDirName);
 	}
+#elif defined(__APPLE__)
+	if(FindGameRoot(ms_rootDirName, sizeof(ms_rootDirName))){
+		strcpy(ms_dirName, ms_rootDirName);
+		mychdir(ms_rootDirName);
+	}else{
+		_getcwd(ms_rootDirName, sizeof(ms_rootDirName));
+		strcat(ms_rootDirName, "\\");
+	}
 #else
-    _getcwd(ms_rootDirName, 128);
+	_getcwd(ms_rootDirName, sizeof(ms_rootDirName));
 	strcat(ms_rootDirName, "\\");
 #endif
 }

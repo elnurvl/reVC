@@ -1,10 +1,12 @@
 #ifndef __GTA_FILEMGR_H__
 #define __GTA_FILEMGR_H__
 
+#define FILEMGR_PATH_SIZE 1024
+
 class CFileMgr
 {
-	static char ms_rootDirName[128];
-	static char ms_dirName[128];
+	static char ms_rootDirName[FILEMGR_PATH_SIZE];
+	static char ms_dirName[FILEMGR_PATH_SIZE];
 public:
 	static void Initialise(void);
 	static void ChangeDir(const char *dir);
