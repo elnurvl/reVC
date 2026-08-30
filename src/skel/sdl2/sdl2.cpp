@@ -106,10 +106,14 @@ void _psCreateFolder(const char *path)
  */
 const char *_psGetUserFilesFolder()
 {
+#ifdef __APPLE__
+	return GetMacOSUserFilesFolder();
+#else
     static char szUserFiles[256];
     strcpy(szUserFiles, "userfiles");
     _psCreateFolder(szUserFiles);
     return szUserFiles;
+#endif
 }
 
 /*

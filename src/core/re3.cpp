@@ -197,7 +197,19 @@ CustomFrontendOptionsPopulate(void)
 #define MINI_CASE_SENSITIVE
 #include "ini.h"
 
+#ifdef __APPLE__
+static const char *
+GetINIFilePath()
+{
+	static char path[PATH_MAX];
+	int length = snprintf(path, sizeof(path), "%s/reVC.ini", GetMacOSUserFilesFolder());
+	return length >= 0 && length < (int)sizeof(path) ? path : "reVC.ini";
+}
+
+mINI::INIFile ini(GetINIFilePath());
+#else
 mINI::INIFile ini("reVC.ini");
+#endif
 mINI::INIStructure cfg;
 
 bool ReadIniIfExists(const char *cat, const char *key, uint32 *out)

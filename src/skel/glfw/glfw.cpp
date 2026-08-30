@@ -168,6 +168,8 @@ const char *_psGetUserFilesFolder()
 	
 	strcpy(szUserFiles, "data");
 	return szUserFiles;
+#elif defined __APPLE__
+	return GetMacOSUserFilesFolder();
 #else
 	static char szUserFiles[256];
 	strcpy(szUserFiles, "userfiles");
