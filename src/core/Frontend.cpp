@@ -4855,7 +4855,6 @@ CMenuManager::ProcessUserInput(uint8 goDown, uint8 goUp, uint8 optionSelected, u
 					DMAudio.Service();
 					CentreMousePointer();
 					m_bShowMouse = true;
-					m_nCurrOption = 5; // TODO(Miami): Because selected option is resetted after res. change. We'll need to revisit that.
 					m_nOptionHighlightTransitionBlend = 0;
 					SaveSettings();
 				}
