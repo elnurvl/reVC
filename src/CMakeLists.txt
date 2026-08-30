@@ -224,6 +224,7 @@ if(APPLE AND NOT ANDROID)
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${PROJECT_SOURCE_DIR}/res/macos/Info.plist"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.github.mrxenginner.reVC"
+        XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME "YES"
     )
     add_custom_command(TARGET ${EXECUTABLE} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E remove_directory

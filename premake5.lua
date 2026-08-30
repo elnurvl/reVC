@@ -308,6 +308,7 @@ project "reVC"
 		xcodebuildsettings {
 			["PRODUCT_BUNDLE_IDENTIFIER"] = "io.github.mrxenginner.reVC",
 			["INSTALL_PATH"] = "$(LOCAL_APPS_DIR)",
+			["ENABLE_HARDENED_RUNTIME"] = "YES",
 		}
 		postbuildcommands {
 			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources"',
