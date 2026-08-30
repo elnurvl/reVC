@@ -232,6 +232,9 @@ project "librw"
 		targetdir(path.join(Librw, "lib/%{cfg.platform}/%{cfg.buildcfg}"))
 	filter "action:xcode4"
 		targetdir "${BUILD_DIR}/%{cfg.buildcfg}"
+		xcodebuildsettings {
+			["SKIP_INSTALL"] = "YES",
+		}
 
 	filter {}
 
