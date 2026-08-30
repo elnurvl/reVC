@@ -11,6 +11,7 @@
 #include "crossplatform.h"
 
 #include "FileMgr.h"
+#include "main.h"
 
 const char *_psGetUserFilesFolder();
 
@@ -140,55 +141,18 @@ FindBundledGameFiles(char *path, size_t pathSize)
 }
 
 static bool
-GetGameRootFile(char *dir, size_t dirSize, char *path, size_t pathSize)
-{
-	const char *home = getenv("HOME");
-	if(home == nil || *home == '\0')
-		return false;
-
-	int len = snprintf(dir, dirSize, "%s/Library/Application Support/reVC", home);
-	if(len < 0 || len >= (int)dirSize)
-		return false;
-	len = snprintf(path, pathSize, "%s/gamefiles", dir);
-	return len >= 0 && len < (int)pathSize;
-}
-
-static bool
 ReadGameRoot(char *path, size_t pathSize)
 {
-	char dir[FILEMGR_PATH_SIZE];
-	char fileName[FILEMGR_PATH_SIZE];
-	if(!GetGameRootFile(dir, sizeof(dir), fileName, sizeof(fileName)))
-		return false;
-
-	FILE *file = fopen(fileName, "r");
-	if(file == nil)
-		return false;
-
 	char root[FILEMGR_PATH_SIZE];
-	bool found = fgets(root, sizeof(root), file) != nil;
-	fclose(file);
-	if(!found)
+	if(!ReadGamePathFromINI(root, sizeof(root)))
 		return false;
-
-	root[strcspn(root, "\r\n")] = '\0';
 	return SetGameRoot(root, path, pathSize);
 }
 
 static void
 WriteGameRoot(const char *root)
 {
-	char dir[FILEMGR_PATH_SIZE];
-	char fileName[FILEMGR_PATH_SIZE];
-	if(!GetGameRootFile(dir, sizeof(dir), fileName, sizeof(fileName)))
-		return;
-
-	mkdir(dir, 0755);
-	FILE *file = fopen(fileName, "w");
-	if(file != nil){
-		fprintf(file, "%s\n", root);
-		fclose(file);
-	}
+	WriteGamePathToINI(root);
 }
 
 static bool
