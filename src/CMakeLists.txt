@@ -225,6 +225,14 @@ if(APPLE AND NOT ANDROID)
         MACOSX_BUNDLE_INFO_PLIST "${PROJECT_SOURCE_DIR}/res/macos/Info.plist"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.github.mrxenginner.reVC"
     )
+    add_custom_command(TARGET ${EXECUTABLE} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory
+            "$<TARGET_BUNDLE_CONTENT_DIR:${EXECUTABLE}>/Resources/gamefiles"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${PROJECT_SOURCE_DIR}/gamefiles"
+            "$<TARGET_BUNDLE_CONTENT_DIR:${EXECUTABLE}>/Resources/gamefiles"
+        COMMENT "Copying gamefiles into the app bundle"
+    )
 endif()
 
 if(${PROJECT}_INSTALL)

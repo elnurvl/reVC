@@ -306,6 +306,11 @@ project "reVC"
 			["PRODUCT_BUNDLE_IDENTIFIER"] = "io.github.mrxenginner.reVC",
 			["INSTALL_PATH"] = "$(LOCAL_APPS_DIR)",
 		}
+		postbuildcommands {
+			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources"',
+			'{RMDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources/gamefiles"',
+			'{COPYDIR} "%{prj.location}/../gamefiles" "%{cfg.targetdir}/reVC.app/Contents/Resources"',
+		}
 
 	filter { "system:macosx", "action:gmake*" }
 		postbuildcommands {
@@ -314,6 +319,8 @@ project "reVC"
 			'{COPYFILE} "%{cfg.buildtarget.abspath}" "%{cfg.targetdir}/reVC.app/Contents/MacOS/reVC"',
 			'{COPYFILE} "%{prj.location}/../res/images/reVC.icns" "%{cfg.targetdir}/reVC.app/Contents/Resources/reVC.icns"',
 			'{COPYFILE} "%{prj.location}/../res/macos/Info.plist" "%{cfg.targetdir}/reVC.app/Contents/Info.plist"',
+			'{RMDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources/gamefiles"',
+			'{COPYDIR} "%{prj.location}/../gamefiles" "%{cfg.targetdir}/reVC.app/Contents/Resources"',
 		}
 
 	filter {}

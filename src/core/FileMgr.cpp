@@ -66,6 +66,8 @@ void mychdir(char const *path)
 #endif
 
 #ifdef __APPLE__
+static char bundledGameFilesDir[FILEMGR_PATH_SIZE] = {'\0'};
+
 static bool
 GameFileExists(const char *root, const char *name)
 {
@@ -111,6 +113,29 @@ GetExecutableDir(char *path, size_t pathSize)
 	char realPath[FILEMGR_PATH_SIZE];
 	const char *dir = realpath(executable, realPath) == nil ? executable : realPath;
 	int length = snprintf(path, pathSize, "%s", dir);
+	return length >= 0 && length < (int)pathSize;
+}
+
+static bool
+FindBundledGameFiles(char *path, size_t pathSize)
+{
+	char executableDir[FILEMGR_PATH_SIZE];
+	if(!GetExecutableDir(executableDir, sizeof(executableDir)))
+		return false;
+
+	char bundleDir[FILEMGR_PATH_SIZE];
+	int length = snprintf(bundleDir, sizeof(bundleDir),
+		"%s/../Resources/gamefiles", executableDir);
+	if(length < 0 || length >= (int)sizeof(bundleDir))
+		return false;
+
+	char realBundleDir[FILEMGR_PATH_SIZE];
+	struct stat status;
+	if(realpath(bundleDir, realBundleDir) == nil ||
+	   stat(realBundleDir, &status) != 0 || !S_ISDIR(status.st_mode))
+		return false;
+
+	length = snprintf(path, pathSize, "%s", realBundleDir);
 	return length >= 0 && length < (int)pathSize;
 }
 
@@ -206,13 +231,7 @@ FindGameRoot(char *path, size_t pathSize)
 			return true;
 
 		char defaultRoot[FILEMGR_PATH_SIZE];
-		int length = snprintf(defaultRoot, sizeof(defaultRoot),
-			"%s/../Resources/gamefiles", executableDir);
-		if(length >= 0 && length < (int)sizeof(defaultRoot) &&
-		   SetGameRoot(defaultRoot, path, pathSize))
-			return true;
-
-		length = snprintf(defaultRoot, sizeof(defaultRoot), "%s/../../..", executableDir);
+		int length = snprintf(defaultRoot, sizeof(defaultRoot), "%s/../../..", executableDir);
 		if(length >= 0 && length < (int)sizeof(defaultRoot) &&
 		   SetGameRoot(defaultRoot, path, pathSize))
 			return true;
@@ -232,6 +251,13 @@ myfopen(const char *filename, const char *mode)
 {
 	int fd;
 	char realmode[10], *p;
+	const char *openPath = filename;
+#ifdef __APPLE__
+	char bundledPath[FILEMGR_PATH_SIZE];
+	if(mode[0] == 'r' && strchr(mode, '+') == nil &&
+	   CFileMgr::ResolveBundledGameFile(filename, bundledPath, sizeof(bundledPath)))
+		openPath = bundledPath;
+#endif
 
 	for(fd = 1; fd < NUMFILES; fd++)
 		if(myfiles[fd].file == nil)
@@ -248,7 +274,7 @@ found:
 	*p++ = 'b';
 	*p = '\0';
 	
-	myfiles[fd].file = fcaseopen(filename, realmode);
+	myfiles[fd].file = fcaseopen(openPath, realmode);
 	if(myfiles[fd].file == nil)
 		return 0;
 	return fd;
@@ -384,6 +410,7 @@ CFileMgr::Initialise(void)
         debug("Android: Root Dir: %s\n", ms_rootDirName);
 	}
 #elif defined(__APPLE__)
+	FindBundledGameFiles(bundledGameFilesDir, sizeof(bundledGameFilesDir));
 	if(ms_rootDirName[0] == '\0' && !FindGameRoot(ms_rootDirName, sizeof(ms_rootDirName)))
 		_exit(0);
 	strcpy(ms_dirName, ms_rootDirName);
@@ -391,6 +418,52 @@ CFileMgr::Initialise(void)
 #else
 	_getcwd(ms_rootDirName, sizeof(ms_rootDirName));
 	strcat(ms_rootDirName, "\\");
+#endif
+}
+
+bool
+CFileMgr::ResolveBundledGameFile(const char *file, char *path, size_t pathSize)
+{
+#ifdef __APPLE__
+	const char *rootDir = CFileMgr::GetRootDirName();
+	if(bundledGameFilesDir[0] == '\0' || rootDir[0] == '\0' ||
+	   file[0] == '\0' || file[0] == '/' || file[0] == '\\')
+		return false;
+
+	char cwd[FILEMGR_PATH_SIZE];
+	if(_getcwd(cwd, sizeof(cwd)) == nil)
+		return false;
+
+	size_t rootLength = strlen(rootDir);
+	while(rootLength > 0 && rootDir[rootLength - 1] == '/')
+		rootLength--;
+	if(strncmp(cwd, rootDir, rootLength) != 0 ||
+	   (cwd[rootLength] != '\0' && cwd[rootLength] != '/'))
+		return false;
+
+	char candidate[FILEMGR_PATH_SIZE];
+	int length = snprintf(candidate, sizeof(candidate), "%s%s/%s",
+		bundledGameFilesDir, cwd + rootLength, file);
+	if(length < 0 || length >= (int)sizeof(candidate))
+		return false;
+
+	char *realPath = casepath(candidate);
+	const char *resolvedPath = realPath == nil ? candidate : realPath;
+	FILE *bundleFile = fopen(resolvedPath, "rb");
+	if(bundleFile == nil){
+		free(realPath);
+		return false;
+	}
+	fclose(bundleFile);
+
+	length = snprintf(path, pathSize, "%s", resolvedPath);
+	free(realPath);
+	return length >= 0 && length < (int)pathSize;
+#else
+	(void)file;
+	(void)path;
+	(void)pathSize;
+	return false;
 #endif
 }
 

@@ -1009,8 +1009,11 @@ void _InputInitialiseJoys()
 	PSGLOBAL(joy2id) = -1;
 
 	// Load our gamepad mappings.
-#define SDL_GAMEPAD_DB_PATH "gamecontrollerdb.txt"
-	FILE *f = fopen(SDL_GAMEPAD_DB_PATH, "rb");
+	char bundledPath[FILEMGR_PATH_SIZE];
+	const char *gamepadDbPath = CFileMgr::ResolveBundledGameFile(
+		"gamecontrollerdb.txt", bundledPath, sizeof(bundledPath)) ?
+		bundledPath : "gamecontrollerdb.txt";
+	FILE *f = fcaseopen(gamepadDbPath, "rb");
 	if (f) {
 		fseek(f, 0, SEEK_END);
 		size_t fsize = ftell(f);
@@ -1021,16 +1024,14 @@ void _InputInitialiseJoys()
 			db[fsize] = '\0';
 
 			if (glfwUpdateGamepadMappings(db) == GLFW_FALSE)
-				Error("glfwUpdateGamepadMappings didn't succeed, check " SDL_GAMEPAD_DB_PATH ".\n");
+				Error("glfwUpdateGamepadMappings didn't succeed, check %s.\n", gamepadDbPath);
 		} else
-			Error("fread on " SDL_GAMEPAD_DB_PATH " wasn't successful.\n");
+			Error("fread on %s wasn't successful.\n", gamepadDbPath);
 
 		free(db);
 		fclose(f);
 	} else
-		printf("You don't seem to have copied " SDL_GAMEPAD_DB_PATH " file from reVC/gamefiles to GTA: Vice City directory. Some gamepads may not be recognized.\n");
-
-#undef SDL_GAMEPAD_DB_PATH
+		printf("You don't seem to have copied %s file from reVC/gamefiles to GTA: Vice City directory. Some gamepads may not be recognized.\n", gamepadDbPath);
 
 	// But always overwrite it with the one in SDL_GAMECONTROLLERCONFIG.
 	char const* EnvControlConfig = getenv("SDL_GAMECONTROLLERCONFIG");

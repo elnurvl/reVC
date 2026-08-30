@@ -704,7 +704,10 @@ void _InputInitialiseJoys()
         char SDL_GAMEPAD_DB_PATH[MAX_PATH];
         snprintf(SDL_GAMEPAD_DB_PATH, sizeof(SDL_GAMEPAD_DB_PATH), "%s%s", pathRoot, "gamecontrollerdb.txt");
 #else
-        const char* SDL_GAMEPAD_DB_PATH = "gamecontrollerdb.txt";
+        char bundledPath[FILEMGR_PATH_SIZE];
+        const char* SDL_GAMEPAD_DB_PATH = CFileMgr::ResolveBundledGameFile(
+            "gamecontrollerdb.txt", bundledPath, sizeof(bundledPath)) ?
+            bundledPath : "gamecontrollerdb.txt";
 #endif
         if (SDL_GameControllerAddMappingsFromFile(SDL_GAMEPAD_DB_PATH) <= 0) {
             debug ("You don't seem to have copied %s file from reVC/gamefiles "
