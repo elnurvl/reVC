@@ -76,6 +76,102 @@ local function dependencyincludedirs(paths)
 	end
 end
 
+local macosxHomebrewPrefix = os.getenv("HOMEBREW_PREFIX")
+if not macosxHomebrewPrefix or macosxHomebrewPrefix == "" then
+	macosxHomebrewPrefix = os.host() == "macosx" and os.hostarch() == "ARM64" and "/opt/homebrew" or "/usr/local"
+end
+
+local function resolveMacosxDependencyDylib(formula, filename, homebrewPrefix)
+	local candidates = {
+		path.join("/opt/local/lib", filename),
+		path.join(homebrewPrefix, "opt", formula, "lib", filename),
+	}
+
+	for _, candidate in ipairs(candidates) do
+		if os.isfile(candidate) then
+			return candidate
+		end
+	end
+	return candidates[2]
+end
+
+local macosxDependencies = {
+	{ formula = "openal-soft", filename = "libopenal.1.dylib" },
+	{ formula = "mpg123", filename = "libmpg123.0.dylib" },
+	{ formula = "glfw", filename = "libglfw.3.dylib" },
+}
+
+local function resolveMacosxDependencyDylibs(homebrewPrefix)
+	local dylibs = {}
+	for _, dependency in ipairs(macosxDependencies) do
+		table.insert(dylibs, {
+			filename = dependency.filename,
+			path = resolveMacosxDependencyDylib(dependency.formula, dependency.filename, homebrewPrefix),
+		})
+	end
+	return dylibs
+end
+
+local macosxDependencyDylibs = resolveMacosxDependencyDylibs(macosxHomebrewPrefix)
+local macosxArm64HomebrewPrefix = os.hostarch() == "ARM64" and macosxHomebrewPrefix or "/opt/homebrew"
+local macosxAmd64HomebrewPrefix = os.hostarch() == "ARM64" and "/usr/local" or macosxHomebrewPrefix
+local macosxArm64DependencyDylibs = resolveMacosxDependencyDylibs(macosxArm64HomebrewPrefix)
+local macosxAmd64DependencyDylibs = resolveMacosxDependencyDylibs(macosxAmd64HomebrewPrefix)
+
+local macosxXcodeArchitectures = _OPTIONS["arch"]
+if not macosxXcodeArchitectures or macosxXcodeArchitectures == "universal" then
+	macosxXcodeArchitectures = "$(ARCHS_STANDARD)"
+end
+
+local macosxXcodeDeploymentTarget = macosxXcodeArchitectures == "x86_64" and "10.12" or "11.0"
+local macosxXcodeBuildSettings = {
+	["ARCHS"] = { macosxXcodeArchitectures },
+	["MACOSX_DEPLOYMENT_TARGET"] = { macosxXcodeDeploymentTarget },
+	["ONLY_ACTIVE_ARCH"] = { "YES" },
+}
+if macosxXcodeArchitectures == "$(ARCHS_STANDARD)" then
+	macosxXcodeBuildSettings["MACOSX_DEPLOYMENT_TARGET[arch=x86_64]"] = { "10.12" }
+end
+
+local function macosxDependencyPaths(dylibs)
+	local paths = {}
+	for _, dylib in ipairs(dylibs) do
+		table.insert(paths, dylib.path)
+	end
+	return paths
+end
+
+local function macosxDependencyFilenames(dylibs)
+	local filenames = {}
+	for _, dylib in ipairs(dylibs) do
+		table.insert(filenames, dylib.filename)
+	end
+	return filenames
+end
+
+local function macosxInstallNameCommands(dylibs, executable)
+	local commands = {}
+	for _, dylib in ipairs(dylibs) do
+		table.insert(commands, 'install_name_tool -change "' .. dylib.path .. '" "@rpath/' .. dylib.filename .. '" "' .. executable .. '"')
+	end
+	return commands
+end
+
+local function macosxGmakeBundleCommands(dylibs)
+	local commands = {}
+	for _, dylib in ipairs(dylibs) do
+		table.insert(commands, '{COPYFILE} "' .. dylib.path .. '" "%{cfg.targetdir}/reVC.app/Contents/Frameworks/' .. dylib.filename .. '"')
+	end
+	for _, command in ipairs(macosxInstallNameCommands(dylibs, "%{cfg.targetdir}/reVC.app/Contents/MacOS/reVC")) do
+		table.insert(commands, command)
+	end
+	for _, dylib in ipairs(dylibs) do
+		table.insert(commands, 'codesign --force --sign - "%{cfg.targetdir}/reVC.app/Contents/Frameworks/' .. dylib.filename .. '"')
+	end
+	table.insert(commands, 'codesign --force --sign - "%{cfg.targetdir}/reVC.app"')
+	return commands
+end
+
 workspace "reVC"
 	language "C++"
 	configurations { "Debug", "Release" }
@@ -119,6 +215,7 @@ workspace "reVC"
 		}
 
 	filter { "system:macosx" }
+		cppdialect "gnu++14"
 		if _ACTION == "xcode4" then
 			platforms { "macosx-librw_gl3_glfw-oal" }
 		else
@@ -162,32 +259,16 @@ workspace "reVC"
 	filter { "platforms:*arm64*" }
 		architecture "ARM64"
 
-	filter { "platforms:macosx-arm64-*", "action:not xcode4", "files:**.cpp"}
-		buildoptions { "-target", "arm64-apple-macos11", "-std=gnu++14" }
-
-	filter { "platforms:macosx-arm64-*", "action:not xcode4", "files:**.c"}
-		buildoptions { "-target", "arm64-apple-macos11" }
-
 	filter { "platforms:macosx-arm64-*", "action:not xcode4" }
+		buildoptions { "-target", "arm64-apple-macos11" }
 		linkoptions { "-target", "arm64-apple-macos11" }
 
-	filter { "platforms:macosx-amd64-*", "action:not xcode4", "files:**.cpp"}
-		buildoptions { "-target", "x86_64-apple-macos10.12", "-std=gnu++14" }
-
-	filter { "platforms:macosx-amd64-*", "action:not xcode4", "files:**.c"}
-		buildoptions { "-target", "x86_64-apple-macos10.12" }
-
 	filter { "platforms:macosx-amd64-*", "action:not xcode4" }
+		buildoptions { "-target", "x86_64-apple-macos10.12" }
 		linkoptions { "-target", "x86_64-apple-macos10.12" }
 
-	filter { "action:xcode4" }
-		cppdialect "gnu++14"
-		xcodebuildsettings {
-			["ARCHS"] = { "$(ARCHS_STANDARD)" },
-			["MACOSX_DEPLOYMENT_TARGET[arch=arm64]"] = { "11.0" },
-			["MACOSX_DEPLOYMENT_TARGET[arch=x86_64]"] = { "10.12" },
-			["ONLY_ACTIVE_ARCH"] = { "YES" },
-		}
+	filter { "system:macosx", "action:xcode4" }
+		xcodebuildsettings(macosxXcodeBuildSettings)
 
 	filter { "platforms:*librw_d3d9*" }
 		defines { "RW_D3D9" }
@@ -228,15 +309,14 @@ if(_OPTIONS["with-librw"]) then
 project "librw"
 	kind "StaticLib"
 	targetname "rw"
-	filter "action:not xcode4"
-		targetdir(path.join(Librw, "lib/%{cfg.platform}/%{cfg.buildcfg}"))
-	filter "action:xcode4"
+	if _ACTION == "xcode4" then
 		targetdir "${BUILD_DIR}/%{cfg.buildcfg}"
 		xcodebuildsettings {
 			["SKIP_INSTALL"] = "YES",
 		}
-
-	filter {}
+	else
+		targetdir(path.join(Librw, "lib/%{cfg.platform}/%{cfg.buildcfg}"))
+	end
 
 	files { path.join(Librw, "src/*.*") }
 	files { path.join(Librw, "src/*/*.*") }
@@ -259,21 +339,15 @@ project "librw"
 
 	-- Support MacPorts and Homebrew
 	filter "platforms:macosx-arm64-*"
-		dependencyincludedirs { "/opt/local/include" }
-		dependencyincludedirs { "/opt/homebrew/include" }
-		libdirs { "/opt/local/lib" }
-		libdirs { "/opt/homebrew/lib" }
+		dependencyincludedirs { "/opt/local/include", "/opt/homebrew/include" }
+		libdirs { "/opt/local/lib", "/opt/homebrew/lib" }
 
 	filter "platforms:macosx-amd64-*"
-		dependencyincludedirs { "/opt/local/include" }
-		dependencyincludedirs { "/usr/local/include" }
-		libdirs { "/opt/local/lib" }
-		libdirs { "/usr/local/lib" }
+		dependencyincludedirs { "/opt/local/include", "/usr/local/include" }
+		libdirs { "/opt/local/lib", "/usr/local/lib" }
 
 	filter { "system:macosx", "action:xcode4" }
-		dependencyincludedirs { "/opt/local/include" }
-		dependencyincludedirs { "/opt/homebrew/include" }
-		dependencyincludedirs { "/usr/local/include" }
+		dependencyincludedirs { "/opt/local/include", "/opt/homebrew/include", "/usr/local/include" }
 		xcodebuildsettings {
 			["LIBRARY_SEARCH_PATHS[arch=arm64]"] = { "$(inherited)", "/opt/local/lib", "/opt/homebrew/lib" },
 			["LIBRARY_SEARCH_PATHS[arch=x86_64]"] = { "$(inherited)", "/opt/local/lib", "/usr/local/lib" },
@@ -294,38 +368,58 @@ end
 project "reVC"
 	kind "WindowedApp"
 	targetname "reVC"
-	filter "action:not xcode4"
-		targetdir "bin/%{cfg.platform}/%{cfg.buildcfg}"
-	filter "action:xcode4"
+	if _ACTION == "xcode4" then
 		targetdir "${BUILD_DIR}/%{cfg.buildcfg}"
-
-	filter {}
+	else
+		targetdir "bin/%{cfg.platform}/%{cfg.buildcfg}"
+	end
 
 	filter { "system:macosx" }
-		files { "res/images/reVC.icns", "res/macos/Info.plist" }
+		files { "res/images/reVC.icns", "res/macos/Info.plist", "res/macos/ThirdPartyNotices.txt" }
 
 	filter { "system:macosx", "action:xcode4" }
+		xcodebuildresources { "res/macos/ThirdPartyNotices.txt" }
 		xcodebuildsettings {
 			["PRODUCT_BUNDLE_IDENTIFIER"] = "io.github.mrxenginner.reVC",
 			["INSTALL_PATH"] = "$(LOCAL_APPS_DIR)",
-			["ENABLE_HARDENED_RUNTIME"] = "YES",
+			["CODE_SIGN_STYLE"] = "Automatic",
+			["LD_RUNPATH_SEARCH_PATHS"] = "$(inherited) @executable_path/../Frameworks",
 		}
+		links(macosxDependencyPaths(macosxDependencyDylibs))
+		links { "pthread" }
+		embedAndSign(macosxDependencyFilenames(macosxDependencyDylibs))
 		postbuildcommands {
 			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources"',
 			'{RMDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources/gamefiles"',
 			'{COPYDIR} "%{prj.location}/../gamefiles" "%{cfg.targetdir}/reVC.app/Contents/Resources"',
 		}
+		postbuildcommands(macosxInstallNameCommands(macosxDependencyDylibs, "${TARGET_BUILD_DIR}/${EXECUTABLE_PATH}"))
+
+	filter { "system:macosx", "action:xcode4", "configurations:Release" }
+		xcodebuildsettings {
+			["CODE_SIGN_IDENTITY"] = "Apple Development",
+			["ENABLE_HARDENED_RUNTIME"] = "YES",
+		}
 
 	filter { "system:macosx", "action:gmake*" }
+		linkoptions { "-Wl,-rpath,@executable_path/../Frameworks" }
 		postbuildcommands {
 			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/MacOS"',
+			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/Frameworks"',
 			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources"',
 			'{COPYFILE} "%{cfg.buildtarget.abspath}" "%{cfg.targetdir}/reVC.app/Contents/MacOS/reVC"',
 			'{COPYFILE} "%{prj.location}/../res/images/reVC.icns" "%{cfg.targetdir}/reVC.app/Contents/Resources/reVC.icns"',
+			'{COPYFILE} "%{prj.location}/../res/macos/ThirdPartyNotices.txt" "%{cfg.targetdir}/reVC.app/Contents/Resources/ThirdPartyNotices.txt"',
 			'{COPYFILE} "%{prj.location}/../res/macos/Info.plist" "%{cfg.targetdir}/reVC.app/Contents/Info.plist"',
 			'{RMDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources/gamefiles"',
 			'{COPYDIR} "%{prj.location}/../gamefiles" "%{cfg.targetdir}/reVC.app/Contents/Resources"',
 		}
+
+	filter { "action:gmake*", "platforms:macosx-arm64-*" }
+		postbuildcommands(macosxGmakeBundleCommands(macosxArm64DependencyDylibs))
+
+	filter { "action:gmake*", "platforms:macosx-amd64-*" }
+		postbuildcommands(macosxGmakeBundleCommands(macosxAmd64DependencyDylibs))
 
 	filter {}
 
@@ -487,9 +581,9 @@ project "reVC"
 	filter "platforms:bsd*oal"
 		links { "openal", "mpg123", "pthread" }
 
-	filter "platforms:macosx*oal"
+	filter { "platforms:macosx*oal", "action:not xcode4" }
 		links { "openal", "mpg123", "pthread" }
-		
+
 	filter "platforms:macosx-arm64-*oal"
 		dependencyincludedirs { "/opt/homebrew/opt/openal-soft/include" }
 		libdirs { "/opt/homebrew/opt/openal-soft/lib" }
@@ -546,29 +640,27 @@ project "reVC"
 		includedirs { "/usr/local/include" }
 		libdirs { "/usr/local/lib" }
 
-	filter "platforms:macosx-arm64-*gl3_glfw*"
+	filter { "platforms:macosx*gl3_glfw*", "action:not xcode4" }
 		links { "glfw" }
 		linkoptions { "-framework OpenGL" }
-		dependencyincludedirs { "/opt/local/include" }
-		dependencyincludedirs { "/opt/homebrew/include" }
-		libdirs { "/opt/local/lib" }
-		libdirs { "/opt/homebrew/lib" }
+
+	filter "platforms:macosx-arm64-*gl3_glfw*"
+		dependencyincludedirs { "/opt/local/include", "/opt/homebrew/include" }
+		libdirs { "/opt/local/lib", "/opt/homebrew/lib" }
 
 	filter "platforms:macosx-amd64-*gl3_glfw*"
-		links { "glfw" }
-		linkoptions { "-framework OpenGL" }
-		dependencyincludedirs { "/opt/local/include" }
-		dependencyincludedirs { "/usr/local/include" }
-		libdirs { "/opt/local/lib" }
-		libdirs { "/usr/local/lib" }
+		dependencyincludedirs { "/opt/local/include", "/usr/local/include" }
+		libdirs { "/opt/local/lib", "/usr/local/lib" }
 
 	filter { "system:macosx", "action:xcode4" }
-		links { "glfw", "OpenGL.framework" }
-		dependencyincludedirs { "/opt/local/include" }
-		dependencyincludedirs { "/opt/homebrew/include" }
-		dependencyincludedirs { "/usr/local/include" }
-		dependencyincludedirs { "/opt/homebrew/opt/openal-soft/include" }
-		dependencyincludedirs { "/usr/local/opt/openal-soft/include" }
+		links { "OpenGL.framework" }
+		dependencyincludedirs {
+			"/opt/local/include",
+			"/opt/homebrew/include",
+			"/usr/local/include",
+			"/opt/homebrew/opt/openal-soft/include",
+			"/usr/local/opt/openal-soft/include",
+		}
 		xcodebuildsettings {
 			["LIBRARY_SEARCH_PATHS[arch=arm64]"] = { "$(inherited)", "/opt/local/lib", "/opt/homebrew/lib", "/opt/homebrew/opt/openal-soft/lib" },
 			["LIBRARY_SEARCH_PATHS[arch=x86_64]"] = { "$(inherited)", "/opt/local/lib", "/usr/local/lib", "/usr/local/opt/openal-soft/lib" },
