@@ -482,13 +482,13 @@ project "reVC"
 		libdirs { "vendor/openal-soft/libs/Win64" }
 
 	filter "platforms:linux*oal"
-		links { "openal", "mpg123", "sndfile", "pthread" }
+		links { "openal", "mpg123", "pthread" }
 		
 	filter "platforms:bsd*oal"
-		links { "openal", "mpg123", "sndfile", "pthread" }
+		links { "openal", "mpg123", "pthread" }
 
 	filter "platforms:macosx*oal"
-		links { "openal", "mpg123", "sndfile", "pthread" }
+		links { "openal", "mpg123", "pthread" }
 		
 	filter "platforms:macosx-arm64-*oal"
 		dependencyincludedirs { "/opt/homebrew/opt/openal-soft/include" }
