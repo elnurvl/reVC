@@ -1,3 +1,6 @@
+#ifndef __GTA_CROSSPLATFORM_H__
+#define __GTA_CROSSPLATFORM_H__
+
 #ifndef GTA_PS2
 
 #include <time.h>
@@ -203,3 +206,5 @@ void GetDateFormat(int, int, SYSTEMTIME*, int, char*, int);
 
 #endif
 #endif
+
+#endif // __GTA_CROSSPLATFORM_H__
