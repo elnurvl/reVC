@@ -85,7 +85,18 @@ else()
 endif()
 
 if(${PROJECT}_AUDIO STREQUAL "OAL")
-    find_package(OpenAL REQUIRED)
+    if(NOT TARGET OpenAL::OpenAL)
+        if(APPLE)
+            find_package(OpenAL CONFIG QUIET
+                PATHS
+                    "/opt/homebrew/opt/openal-soft"
+                    "/usr/local/opt/openal-soft"
+            )
+        endif()
+        if(NOT TARGET OpenAL::OpenAL)
+            find_package(OpenAL REQUIRED)
+        endif()
+    endif()
     if(TARGET OpenAL::OpenAL)
         target_link_libraries(${EXECUTABLE} PRIVATE OpenAL::OpenAL)
     else()
@@ -100,7 +111,9 @@ elseif(${PROJECT}_AUDIO STREQUAL "MSS")
     target_link_libraries(${EXECUTABLE} PRIVATE MilesSDK::MilesSDK)
 endif()
 
-find_package(mpg123 REQUIRED)
+if(NOT TARGET MPG123::libmpg123)
+    find_package(mpg123 REQUIRED)
+endif()
 target_link_libraries(${EXECUTABLE} PRIVATE
     MPG123::libmpg123
 )
@@ -224,7 +237,9 @@ if(APPLE AND NOT ANDROID)
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${PROJECT_SOURCE_DIR}/res/macos/Info.plist"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.github.mrxenginner.reVC"
-        XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME "YES"
+        "XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME[sdk=macosx*]" "YES"
+        "XCODE_ATTRIBUTE_INSTALL_PATH[sdk=macosx*]" "$(LOCAL_APPS_DIR)"
+        XCODE_ATTRIBUTE_SKIP_INSTALL "NO"
     )
     add_custom_command(TARGET ${EXECUTABLE} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E remove_directory

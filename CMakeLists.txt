@@ -3,6 +3,29 @@ cmake_minimum_required(VERSION 3.14)
 set(EXECUTABLE reVC)
 set(PROJECT REVC)
 
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    if(CMAKE_GENERATOR STREQUAL "Xcode")
+        set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
+        if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+            set(CMAKE_OSX_DEPLOYMENT_TARGET "10.12" CACHE STRING
+                "Minimum macOS version" FORCE)
+        endif()
+        if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "11.0")
+            set("CMAKE_XCODE_ATTRIBUTE_MACOSX_DEPLOYMENT_TARGET[arch=arm64]" "11.0")
+        endif()
+    elseif(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        if(CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR
+           (NOT CMAKE_OSX_ARCHITECTURES AND
+            CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64"))
+            set(CMAKE_OSX_DEPLOYMENT_TARGET "10.12" CACHE STRING
+                "Minimum macOS version" FORCE)
+        else()
+            set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING
+                "Minimum macOS version" FORCE)
+        endif()
+    endif()
+endif()
+
 project(${EXECUTABLE} C CXX)
 set(${PROJECT}_AUTHOR "${PROJECT} Team")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
@@ -10,6 +33,47 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(GetGitRevisionDescription)
 get_git_head_revision(GIT_REFSPEC GIT_SHA1 "ALLOW_LOOKING_ABOVE_CMAKE_SOURCE_DIR")
 message(STATUS "Building ${CMAKE_PROJECT_NAME} GIT SHA1: ${GIT_SHA1}")
+
+if(APPLE AND CMAKE_GENERATOR STREQUAL "Xcode")
+    set(${PROJECT}_HOMEBREW_ARM64_PREFIX "/opt/homebrew" CACHE PATH "arm64 Homebrew prefix")
+    set(${PROJECT}_HOMEBREW_X86_64_PREFIX "/usr/local" CACHE PATH "x86_64 Homebrew prefix")
+
+    function(reVC_macos_homebrew_dependency target alias formula library)
+        set(include_prefix)
+        set(link_options)
+        foreach(architecture arm64 x86_64)
+            if(architecture IN_LIST CMAKE_OSX_ARCHITECTURES)
+                string(TOUPPER "${architecture}" architecture_upper)
+                set(prefix "${${PROJECT}_HOMEBREW_${architecture_upper}_PREFIX}")
+                if(NOT EXISTS "${prefix}/opt/${formula}/lib/lib${library}.dylib")
+                    message(FATAL_ERROR
+                        "${architecture} ${formula} was not found under ${prefix}"
+                    )
+                endif()
+                if(NOT include_prefix)
+                    set(include_prefix "${prefix}")
+                endif()
+                list(APPEND link_options
+                    "SHELL:-Xarch_${architecture} -L${prefix}/opt/${formula}/lib"
+                )
+            endif()
+        endforeach()
+
+        add_library(${target} INTERFACE)
+        add_library(${alias} ALIAS ${target})
+        target_include_directories(${target} INTERFACE
+            "${include_prefix}/opt/${formula}/include"
+        )
+        target_link_options(${target} INTERFACE ${link_options} "-l${library}")
+    endfunction()
+
+    if("arm64" IN_LIST CMAKE_OSX_ARCHITECTURES OR
+       "x86_64" IN_LIST CMAKE_OSX_ARCHITECTURES)
+        reVC_macos_homebrew_dependency(${PROJECT}_macos_openal OpenAL::OpenAL openal-soft openal)
+        reVC_macos_homebrew_dependency(${PROJECT}_macos_glfw glfw glfw glfw)
+        reVC_macos_homebrew_dependency(${PROJECT}_macos_mpg123 MPG123::libmpg123 mpg123 mpg123)
+    endif()
+endif()
 
 
 if(NINTENDO_SWITCH)
@@ -42,6 +106,9 @@ endif()
 
 option(${PROJECT}_VENDORED_LIBRW "Use vendored librw" ON)
 if(${PROJECT}_VENDORED_LIBRW)
+    if(NOT DEFINED LIBRW_PLATFORM AND NOT PS2)
+        set(LIBRW_PLATFORM "GL3" CACHE STRING "librw platform")
+    endif()
     add_subdirectory(vendor/librw)
 else()
     find_package(librw REQUIRED)
