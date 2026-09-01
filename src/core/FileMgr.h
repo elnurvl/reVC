@@ -26,4 +26,9 @@ public:
 	static char *GetRootDirName() { return ms_rootDirName; }
 };
 
+#ifdef __APPLE__
+bool ReadGamePathFromINI(char *path, size_t pathSize);
+void WriteGamePathToINI(const char *path);
+#endif
+
 #endif // __GTA_FILEMGR_H__

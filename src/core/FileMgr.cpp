@@ -11,7 +11,6 @@
 #include "crossplatform.h"
 
 #include "FileMgr.h"
-#include "main.h"
 
 const char *_psGetUserFilesFolder();
 
