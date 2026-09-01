@@ -406,6 +406,7 @@ project "reVC"
 		embedAndSign(macosxDependencyFilenames(macosxDependencyDylibs))
 		postbuildcommands {
 			'{MKDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources"',
+			'{COPYFILE} "%{prj.location}/../LICENSE.md" "%{cfg.targetdir}/reVC.app/Contents/Resources/LICENSE"',
 			'{RMDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources/gamefiles"',
 			'{COPYDIR} "%{prj.location}/../gamefiles" "%{cfg.targetdir}/reVC.app/Contents/Resources"',
 		}
@@ -426,6 +427,7 @@ project "reVC"
 			'{COPYFILE} "%{cfg.buildtarget.abspath}" "%{cfg.targetdir}/reVC.app/Contents/MacOS/reVC"',
 			'{COPYFILE} "%{prj.location}/../res/images/reVC.icns" "%{cfg.targetdir}/reVC.app/Contents/Resources/reVC.icns"',
 			'{COPYFILE} "%{prj.location}/../res/macos/ThirdPartyNotices.txt" "%{cfg.targetdir}/reVC.app/Contents/Resources/ThirdPartyNotices.txt"',
+			'{COPYFILE} "%{prj.location}/../LICENSE.md" "%{cfg.targetdir}/reVC.app/Contents/Resources/LICENSE"',
 			'{COPYFILE} "%{prj.location}/../res/macos/Info.plist" "%{cfg.targetdir}/reVC.app/Contents/Info.plist"',
 			'{RMDIR} "%{cfg.targetdir}/reVC.app/Contents/Resources/gamefiles"',
 			'{COPYDIR} "%{prj.location}/../gamefiles" "%{cfg.targetdir}/reVC.app/Contents/Resources"',

@@ -254,6 +254,9 @@ if(APPLE AND NOT ANDROID)
         XCODE_ATTRIBUTE_SKIP_INSTALL "NO"
     )
     add_custom_command(TARGET ${EXECUTABLE} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PROJECT_SOURCE_DIR}/LICENSE.md"
+            "$<TARGET_BUNDLE_CONTENT_DIR:${EXECUTABLE}>/Resources/LICENSE"
         COMMAND ${CMAKE_COMMAND} -E remove_directory
             "$<TARGET_BUNDLE_CONTENT_DIR:${EXECUTABLE}>/Resources/gamefiles"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
