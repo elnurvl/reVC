@@ -118,6 +118,22 @@ local macosxAmd64HomebrewPrefix = os.hostarch() == "ARM64" and "/usr/local" or m
 local macosxArm64DependencyDylibs = resolveMacosxDependencyDylibs(macosxArm64HomebrewPrefix)
 local macosxAmd64DependencyDylibs = resolveMacosxDependencyDylibs(macosxAmd64HomebrewPrefix)
 
+local function existingDirectories(directories)
+	local existing = {}
+	for _, directory in ipairs(directories) do
+		if os.isdir(directory) then
+			table.insert(existing, directory)
+		end
+	end
+	return existing
+end
+
+local function existingXcodeSearchPaths(directories)
+	local existing = existingDirectories(directories)
+	table.insert(existing, 1, "$(inherited)")
+	return existing
+end
+
 local macosxXcodeArchitectures = _OPTIONS["arch"]
 if not macosxXcodeArchitectures or macosxXcodeArchitectures == "universal" then
 	macosxXcodeArchitectures = "$(ARCHS_STANDARD)"
@@ -585,12 +601,12 @@ project "reVC"
 		links { "openal", "mpg123", "pthread" }
 
 	filter "platforms:macosx-arm64-*oal"
-		dependencyincludedirs { "/opt/homebrew/opt/openal-soft/include" }
-		libdirs { "/opt/homebrew/opt/openal-soft/lib" }
+		dependencyincludedirs(existingDirectories { "/opt/homebrew/opt/openal-soft/include" })
+		libdirs(existingDirectories { "/opt/homebrew/opt/openal-soft/lib" })
 
 	filter "platforms:macosx-amd64-*oal"
-		dependencyincludedirs { "/usr/local/opt/openal-soft/include" }
-		libdirs { "/usr/local/opt/openal-soft/lib" }
+		dependencyincludedirs(existingDirectories { "/usr/local/opt/openal-soft/include" })
+		libdirs(existingDirectories { "/usr/local/opt/openal-soft/lib" })
 
 	if _OPTIONS["with-opus"] then
 		filter {}
@@ -654,14 +670,14 @@ project "reVC"
 
 	filter { "system:macosx", "action:xcode4" }
 		links { "OpenGL.framework" }
-		dependencyincludedirs {
+		dependencyincludedirs(existingDirectories {
 			"/opt/local/include",
 			"/opt/homebrew/include",
 			"/usr/local/include",
 			"/opt/homebrew/opt/openal-soft/include",
 			"/usr/local/opt/openal-soft/include",
-		}
+		})
 		xcodebuildsettings {
-			["LIBRARY_SEARCH_PATHS[arch=arm64]"] = { "$(inherited)", "/opt/local/lib", "/opt/homebrew/lib", "/opt/homebrew/opt/openal-soft/lib" },
-			["LIBRARY_SEARCH_PATHS[arch=x86_64]"] = { "$(inherited)", "/opt/local/lib", "/usr/local/lib", "/usr/local/opt/openal-soft/lib" },
+			["LIBRARY_SEARCH_PATHS[arch=arm64]"] = existingXcodeSearchPaths { "/opt/local/lib", "/opt/homebrew/lib", "/opt/homebrew/opt/openal-soft/lib" },
+			["LIBRARY_SEARCH_PATHS[arch=x86_64]"] = existingXcodeSearchPaths { "/opt/local/lib", "/usr/local/lib", "/usr/local/opt/openal-soft/lib" },
 		}
